@@ -1,0 +1,264 @@
+// Prisma Schema for KrishiSaathi Backend
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// FARMERS TABLE
+// ============================================
+model Farmer {
+  id                  String         @id @default(uuid())
+  name                String         @db.Text
+  phoneNumber         String         @unique
+  preferredLanguage   Language       @default(ENGLISH)
+
+  
+  // Metadata
+  registrationDate    DateTime       @default(now())
+  lastLogin           DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  
+  // Relations
+  farmerCrops         FarmerCrop[]
+  chatHistory         ChatHistory[]  @relation("FarmerToChats")
+  farmerSessions      FarmerSession[]
+  locations           FarmerLocation[]
+
+  @@map("farmers")
+}
+
+// ============================================
+// FARMERS LOCATION
+// ============================================
+model FarmerLocation {
+  id           String   @id @default(uuid())
+  farmerId     String
+  locationName String
+  latitude     Float
+  longitude    Float
+
+  address      String?
+  village      String?
+  city         String?
+  district     String?
+  state        String?
+  pincode      String?
+
+  isActive     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  farmer       Farmer   @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  crops        FarmerCrop[]     @relation("LocationCrops")
+  chats        ChatHistory[]    @relation("LocationChats")
+  weather      WeatherData[]
+  forecasts    WeatherForecast[]
+
+  @@map("farmer_locations")
+}
+
+
+
+// ============================================
+// WEATHER DATA TABLE
+// ============================================
+model WeatherData {
+  id              String   @id @default(uuid())
+
+  locationId      String
+
+  temperature     Float
+  feelsLike       Float
+  humidity        Int
+  windSpeed       Float
+  weatherMain     String
+  weatherDesc     String
+  weatherIcon     String
+  pressure        Int?
+  visibility      Int?
+  cloudiness      Int?
+  sunrise         DateTime?
+  sunset          DateTime?
+
+  fetchedAt       DateTime @default(now())
+
+  location        FarmerLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@map("weather_data")
+  @@index([locationId])
+}
+
+
+// ============================================
+// WEATHER FORECAST TABLE
+// ============================================
+model WeatherForecast {
+  id              String   @id @default(uuid())
+
+  locationId      String
+
+  date            DateTime
+  tempMin         Float
+  tempMax         Float
+  weatherMain     String
+  weatherDesc     String
+  weatherIcon     String
+  humidity        Int
+  windSpeed       Float
+  chanceOfRain    Float?
+
+  fetchedAt       DateTime @default(now())
+
+  location        FarmerLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@map("weather_forecast")
+  @@index([locationId, date])
+}
+
+// ============================================
+// CROPS MASTER TABLE
+// ============================================
+model CropMaster {
+  id                    String          @id @default(uuid())
+  cropNameEn            String
+  cropNameHi            String?
+  cropNameBn            String?
+  suitableClimate       Climate
+  waterRequirement      WaterRequirement
+  growingDurationDays   Int
+  
+  // Descriptions
+  descriptionEn         String?         @db.Text
+  descriptionHi         String?         @db.Text
+  descriptionBn         String?         @db.Text
+  
+  createdAt             DateTime        @default(now())
+  
+  // Relations
+  farmerCrops           FarmerCrop[]
+  weatherPrecautions    WeatherPrecaution[]
+  
+  @@map("crops_master")
+}
+
+// ============================================
+// FARMER CROPS TABLE
+// ============================================
+model FarmerCrop {
+  id                  String       @id @default(uuid())
+  farmerId            String
+  locationId          String
+  cropId              String
+  sowingDate          DateTime
+  expectedHarvestDate DateTime?
+  status              CropStatus   @default(GROWING)
+  createdAt           DateTime     @default(now())
+  
+  // Relations
+  farmer              Farmer       @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  location            FarmerLocation @relation("LocationCrops", fields: [locationId], references: [id], onDelete: Cascade)
+  crop                CropMaster   @relation(fields: [cropId], references: [id])
+  
+  @@map("farmer_crops")
+}
+
+// ============================================
+// WEATHER PRECAUTIONS TABLE
+// ============================================
+model WeatherPrecaution {
+  id                String           @id @default(uuid())
+  cropId            String
+  weatherCondition  WeatherCondition
+  
+  // Precautions in multiple languages
+  precautionTextEn  String           @db.Text
+  precautionTextHi  String?          @db.Text
+  precautionTextBn  String?          @db.Text
+  
+  // Relations
+  crop              CropMaster       @relation(fields: [cropId], references: [id])
+  
+  @@map("weather_precautions")
+}
+
+// ============================================
+// CHAT HISTORY TABLE
+// ============================================
+model ChatHistory {
+  id              String    @id @default(uuid())
+  farmerId        String
+  messageText     String    @db.Text
+  messageLanguage Language
+  isFarmerMessage Boolean   // true = from farmer, false = from bot
+  timestamp       DateTime  @default(now())
+  locationId      String
+
+  // Relations
+  farmer          Farmer @relation("FarmerToChats", fields: [farmerId], references: [id], onDelete: Cascade)
+  location        FarmerLocation @relation("LocationChats", fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@map("chat_history")
+}
+
+// ============================================
+// SESSION MANAGEMENT TABLE
+// ============================================
+model FarmerSession {
+  id            String   @id @default(uuid())
+  sessionId     String   @unique
+  farmerId      String
+  deviceInfo    String?
+  intakeStep     Int?        // 1 to 5
+  intakeData     Json?       // temporary storage of answers
+  createdAt     DateTime @default(now())
+  lastAccessed  DateTime @updatedAt
+  
+  // Relations
+  farmer        Farmer   @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  
+  @@map("farmer_sessions")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+enum Language {
+  ENGLISH
+  BENGALI
+  HINDI
+}
+
+enum Climate {
+  SUMMER
+  WINTER
+  MONSOON
+  ALL_SEASON
+}
+
+enum WaterRequirement {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum CropStatus {
+  SOWING
+  GROWING
+  HARVESTED
+}
+
+enum WeatherCondition {
+  CLEAR
+  RAIN
+  DROUGHT
+  HEATWAVE
+  COLD
+  STORM
+  CLOUDY
+}
